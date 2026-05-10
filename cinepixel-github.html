@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinePixel</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0e0c0a; --surface: #1a1713; --gold: #c9a84c;
+  --gold-dim: #7a6330; --cream: #f0e6d0; --red: #c0392b;
+  --green: #27ae60; --border: rgba(201,168,76,0.2);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:var(--bg); min-height:100vh; display:flex;
+  flex-direction:column; align-items:center; justify-content:center;
+  font-family:'DM Mono',monospace; color:var(--cream); padding:16px;
+}
+#app { width:100%; max-width:460px; display:flex; flex-direction:column; }
+
+header {
+  display:flex; align-items:baseline; justify-content:space-between;
+  padding-bottom:10px; border-bottom:1px solid var(--border); margin-bottom:16px;
+}
+h1 { font-family:'Playfair Display',serif; font-size:1.6rem; color:var(--gold); }
+#round-info { font-size:.65rem; color:var(--gold-dim); letter-spacing:.2em; text-transform:uppercase; }
+
+/* Setup */
+#setup-screen {
+  background:var(--surface); border:1px solid var(--border);
+  padding:24px; display:flex; flex-direction:column; gap:14px;
+}
+#setup-screen h2 { font-family:'Playfair Display',serif; color:var(--gold); font-size:1.1rem; }
+#setup-screen p { font-size:.7rem; color:var(--cream); opacity:.75; line-height:1.8; }
+#setup-screen a { color:var(--gold); }
+#setup-screen ol { font-size:.7rem; color:var(--cream); opacity:.75; line-height:2; padding-left:18px; }
+.field-row { display:flex; gap:8px; }
+.mono-input {
+  flex:1; background:var(--bg); border:1px solid var(--border);
+  color:var(--cream); font-family:'DM Mono',monospace; font-size:.8rem;
+  padding:10px 14px; outline:none; letter-spacing:.04em;
+}
+.mono-input:focus { border-color:var(--gold); }
+.mono-input::placeholder { color:var(--gold-dim); }
+.gold-btn {
+  background:var(--gold); border:none; color:var(--bg);
+  font-family:'DM Mono',monospace; font-size:.8rem; font-weight:500;
+  padding:10px 18px; cursor:pointer; letter-spacing:.1em; text-transform:uppercase;
+  white-space:nowrap; transition:background .15s;
+}
+.gold-btn:hover:not(:disabled) { background:var(--cream); }
+.gold-btn:disabled { opacity:.4; cursor:default; }
+#err-msg { font-size:.65rem; color:var(--red); min-height:16px; }
+
+/* Game */
+#game-screen { display:none; flex-direction:column; }
+
+#frame-wrap {
+  position:relative; width:100%; aspect-ratio:2/3;
+  background:#111; overflow:hidden; border:1px solid var(--border); max-height:55vh;
+}
+#frame-wrap::before,#frame-wrap::after {
+  content:''; position:absolute; top:0; bottom:0; width:16px;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 5px,
+    var(--bg) 5px,var(--bg) 12px,transparent 12px,transparent 17px);
+  z-index:10; opacity:.6;
+}
+#frame-wrap::before{left:0;} #frame-wrap::after{right:0;}
+
+#poster-img {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; display:block; opacity:0; transition:opacity .4s;
+}
+#pixel-canvas {
+  position:absolute; inset:0; width:100%; height:100%;
+  image-rendering:pixelated; z-index:2; transition:opacity .4s;
+}
+#pixel-label {
+  position:absolute; bottom:8px; right:20px; font-size:.55rem;
+  color:rgba(201,168,76,.5); letter-spacing:.2em; z-index:20; text-transform:uppercase;
+}
+#result-overlay {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:flex-end; padding-bottom:24px;
+  background:linear-gradient(to top,rgba(14,12,10,.95) 0%,rgba(14,12,10,.4) 55%,transparent 100%);
+  z-index:30; opacity:0; pointer-events:none; transition:opacity .6s;
+}
+#result-overlay.show { opacity:1; pointer-events:all; }
+#result-title {
+  font-family:'Playfair Display',serif; font-style:italic;
+  font-size:clamp(1.1rem,4vw,1.6rem); color:var(--gold);
+  text-align:center; padding:0 24px; text-shadow:0 2px 12px rgba(0,0,0,.8);
+}
+#result-year { font-size:.7rem; color:var(--cream); opacity:.55; letter-spacing:.25em; margin-top:4px; }
+
+#loading {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:var(--bg); z-index:50; flex-direction:column; gap:12px;
+}
+#loading.hidden { display:none; }
+.spinner { width:26px;height:26px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite; }
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-text { font-size:.6rem; color:var(--gold-dim); letter-spacing:.2em; text-transform:uppercase; }
+
+#attempts-row { display:flex; gap:6px; align-items:center; margin:14px 0 8px; }
+#attempts-label { font-size:.6rem; color:var(--gold-dim); letter-spacing:.15em; text-transform:uppercase; margin-right:4px; }
+.dot { width:10px;height:10px;border-radius:50%;background:var(--surface);border:1px solid var(--gold-dim);transition:all .3s; }
+.dot.used { background:var(--red);border-color:var(--red);box-shadow:0 0 6px var(--red); }
+
+#hint-box {
+  background:var(--surface); border-left:2px solid var(--gold-dim);
+  padding:10px 14px; font-size:.72rem; color:var(--cream); opacity:.8;
+  line-height:1.6; min-height:40px; letter-spacing:.03em; font-style:italic; margin-bottom:10px;
+}
+#feedback { font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; min-height:18px; margin-bottom:8px; text-align:center; }
+#feedback.wrong { color:var(--red); }
+#feedback.correct { color:var(--green); }
+#feedback.info { color:var(--gold-dim); }
+
+#guess-area { display:flex; gap:8px; margin-bottom:8px; }
+#guess-input {
+  flex:1; background:var(--surface); border:1px solid var(--border);
+  color:var(--cream); font-family:'DM Mono',monospace; font-size:.85rem;
+  padding:10px 14px; outline:none; transition:border-color .2s;
+}
+#guess-input:focus { border-color:var(--gold); }
+#guess-input::placeholder { color:var(--gold-dim); }
+#guess-input:disabled { opacity:.4; }
+
+#wrong-list { display:flex; flex-wrap:wrap; gap:6px; min-height:22px; margin-bottom:8px; }
+.wrong-tag {
+  font-size:.58rem; background:rgba(192,57,43,.12);
+  border:1px solid rgba(192,57,43,.3); color:#c07070; padding:3px 8px;
+  animation:fadeIn .3s ease;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+#bottom-row { display:flex; justify-content:flex-end; }
+#skip-btn {
+  background:none; border:none; color:var(--gold-dim); font-family:'DM Mono',monospace;
+  font-size:.6rem; cursor:pointer; letter-spacing:.15em; text-transform:uppercase;
+  text-decoration:underline; text-decoration-color:transparent; transition:all .2s; padding:4px 0;
+}
+#skip-btn:hover { color:var(--gold); text-decoration-color:var(--gold); }
+#next-btn {
+  display:none; background:none; border:1px solid var(--gold); color:var(--gold);
+  font-family:'DM Mono',monospace; font-size:.72rem; padding:8px 22px;
+  cursor:pointer; letter-spacing:.15em; text-transform:uppercase; transition:all .2s; margin-top:10px; width:100%;
+}
+#next-btn:hover { background:var(--gold); color:var(--bg); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>CinePixel</h1>
+    <span id="round-info">Película 1</span>
+  </header>
+
+  <!-- Setup -->
+  <div id="setup-screen">
+    <h2>API key de TMDB</h2>
+    <ol>
+      <li>Regístrate gratis en <a href="https://www.themoviedb.org/signup" target="_blank">themoviedb.org</a></li>
+      <li>Ve a <a href="https://www.themoviedb.org/settings/api" target="_blank">Ajustes → API</a></li>
+      <li>Copia tu <strong>API Key (v3 auth)</strong></li>
+      <li>Pégala aquí:</li>
+    </ol>
+    <div class="field-row">
+      <input class="mono-input" id="tmdb-key-input" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off"/>
+      <button class="gold-btn" id="start-btn" onclick="startWithKey()">Jugar</button>
+    </div>
+    <div id="err-msg"></div>
+  </div>
+
+  <!-- Game -->
+  <div id="game-screen">
+    <div id="frame-wrap">
+      <img id="poster-img" crossorigin="anonymous"/>
+      <canvas id="pixel-canvas"></canvas>
+      <div id="pixel-label">—</div>
+      <div id="result-overlay">
+        <div id="result-title"></div>
+        <div id="result-year"></div>
+      </div>
+      <div id="loading"><div class="spinner"></div><p id="loading-text">Eligiendo película…</p></div>
+    </div>
+
+    <div id="attempts-row"><span id="attempts-label">Intentos</span></div>
+    <div id="hint-box">…</div>
+    <div id="feedback" class="info"></div>
+    <div id="guess-area">
+      <input id="guess-input" class="mono-input" type="text" placeholder="Nombre de la película…" autocomplete="off" spellcheck="false" disabled/>
+      <button class="gold-btn" id="guess-btn" disabled>OK</button>
+    </div>
+    <div id="wrong-list"></div>
+    <div id="bottom-row">
+      <button id="skip-btn" onclick="skipMovie()">Saltar →</button>
+    </div>
+    <button id="next-btn" onclick="nextMovie()">Siguiente película →</button>
+  </div>
+</div>
+
+<script>
+const MAX_ATTEMPTS = 6;
+const PIXEL_LEVELS = [80, 56, 38, 24, 13, 5, 1];
+const ANTHROPIC_KEY = ''; // Opcional: pon aquí tu clave de Anthropic si quieres validación IA
+
+let TMDB_KEY = '';
+let movieData = null;
+let attempt = 0;
+let gameOver = false;
+let movieCount = 0;
+let posterReady = false;
+
+const posterImg = document.getElementById('poster-img');
+const pixelC    = document.getElementById('pixel-canvas');
+const pctx      = pixelC.getContext('2d');
+
+// ── Canvas ───────────────────────────────────────────────────────────────────
+function resizeCanvas() {
+  const wrap = document.getElementById('frame-wrap');
+  pixelC.width  = wrap.clientWidth;
+  pixelC.height = wrap.clientHeight;
+}
+
+function applyPixelation(level) {
+  const W = pixelC.width, H = pixelC.height;
+  pctx.clearRect(0,0,W,H);
+  if (!posterReady) return;
+  if (level <= 1) {
+    posterImg.style.opacity='1';
+    pixelC.style.opacity='0';
+    document.getElementById('pixel-label').textContent='revelado';
+    return;
+  }
+  posterImg.style.opacity='0';
+  pixelC.style.opacity='1';
+  const offW = Math.max(1, Math.ceil(W/level));
+  const offH = Math.max(1, Math.ceil(H/level));
+  const off = document.createElement('canvas');
+  off.width=offW; off.height=offH;
+  const octx = off.getContext('2d');
+  octx.drawImage(posterImg, 0, 0, offW, offH);
+  pctx.imageSmoothingEnabled=false;
+  pctx.drawImage(off, 0, 0, W, H);
+  if (level > 18) {
+    pctx.strokeStyle='rgba(0,0,0,0.15)'; pctx.lineWidth=0.5;
+    for(let y=0;y<H;y+=level){pctx.beginPath();pctx.moveTo(0,y);pctx.lineTo(W,y);pctx.stroke();}
+    for(let x=0;x<W;x+=level){pctx.beginPath();pctx.moveTo(x,0);pctx.lineTo(x,H);pctx.stroke();}
+  }
+  const pct = Math.round((1-level/PIXEL_LEVELS[0])*100);
+  document.getElementById('pixel-label').textContent=`revelado: ${pct}%`;
+}
+
+function updatePixelLevel() {
+  applyPixelation(PIXEL_LEVELS[Math.min(attempt, PIXEL_LEVELS.length-1)]);
+}
+
+// ── Dots ─────────────────────────────────────────────────────────────────────
+function renderDots() {
+  const row = document.getElementById('attempts-row');
+  row.querySelectorAll('.dot').forEach(d=>d.remove());
+  for(let i=0;i<MAX_ATTEMPTS;i++){
+    const d=document.createElement('div');
+    d.className='dot'+(i<attempt?' used':'');
+    row.appendChild(d);
+  }
+}
+
+// ── Fetch movie from Claude ───────────────────────────────────────────────────
+async function fetchMovie() {
+  showLoading(true,'Eligiendo película…');
+  setInputEnabled(false);
+  document.getElementById('feedback').textContent='';
+  document.getElementById('wrong-list').innerHTML='';
+  document.getElementById('next-btn').style.display='none';
+  document.getElementById('result-overlay').classList.remove('show');
+  document.getElementById('hint-box').textContent='…';
+  posterReady=false;
+  posterImg.style.opacity='0';
+  pixelC.style.opacity='1';
+  pctx.clearRect(0,0,pixelC.width,pixelC.height);
+
+  const prompt=`Eres el motor de un juego "Adivina la película por su póster".
+Elige UNA película famosa al azar. Varía género y época. Solo películas muy conocidas.
+
+Responde SOLO con JSON válido, sin markdown:
+{
+  "title": "Título original",
+  "title_es": "Título en español (o igual si no existe)",
+  "year": 1994,
+  "tmdb_id": 12345,
+  "hint": "Pista sutil sin mencionar título ni actores (máx 12 palabras)"
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:200,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data = await res.json();
+    const raw = data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    movieData = JSON.parse(raw);
+    showLoading(true,'Cargando póster…');
+    await fetchPosterFromTMDB();
+  } catch(e) {
+    console.error(e);
+    showLoading(false);
+    document.getElementById('hint-box').textContent='Error. Reintentando…';
+    setTimeout(fetchMovie,2000);
+  }
+}
+
+async function fetchPosterFromTMDB() {
+  try {
+    // Get movie details from TMDB using tmdb_id
+    const res = await fetch(
+      `https://api.themoviedb.org/3/movie/${movieData.tmdb_id}?api_key=${TMDB_KEY}&language=es`,
+      { mode: 'cors' }
+    );
+    const data = await res.json();
+    if (data.poster_path) {
+      await loadPosterImage(`https://image.tmdb.org/t/p/w500${data.poster_path}`);
+    } else {
+      await searchPosterByTitle();
+    }
+  } catch {
+    await searchPosterByTitle();
+  }
+}
+
+async function searchPosterByTitle() {
+  try {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&query=${encodeURIComponent(movieData.title)}&year=${movieData.year}`,
+      { mode: 'cors' }
+    );
+    const data = await res.json();
+    const path = data.results?.[0]?.poster_path;
+    if (path) {
+      await loadPosterImage(`https://image.tmdb.org/t/p/w500${path}`);
+    } else {
+      setupGame(false);
+    }
+  } catch {
+    setupGame(false);
+  }
+}
+
+function loadPosterImage(url) {
+  return new Promise((resolve) => {
+    resizeCanvas();
+    posterImg.onload = () => { posterReady=true; setupGame(true); resolve(); };
+    posterImg.onerror = () => { setupGame(false); resolve(); };
+    posterImg.src = url;
+  });
+}
+
+function setupGame(hasPoster) {
+  attempt=0; gameOver=false; movieCount++;
+  document.getElementById('round-info').textContent=`Película ${movieCount}`;
+  document.getElementById('hint-box').textContent=movieData.hint;
+  document.getElementById('guess-input').value='';
+  if (!hasPoster) {
+    pctx.fillStyle='#1a1713';
+    pctx.fillRect(0,0,pixelC.width,pixelC.height);
+    pctx.fillStyle='#7a6330';
+    pctx.font=`${Math.min(pixelC.width/20,14)}px DM Mono, monospace`;
+    pctx.textAlign='center';
+    pctx.fillText('Adivina con la pista →', pixelC.width/2, pixelC.height/2);
+  }
+  renderDots();
+  updatePixelLevel();
+  showLoading(false);
+  setInputEnabled(true);
+  document.getElementById('guess-input').focus();
+}
+
+// ── Guess ─────────────────────────────────────────────────────────────────────
+async function submitGuess() {
+  const val = document.getElementById('guess-input').value.trim();
+  if(!val||gameOver) return;
+  setInputEnabled(false);
+  document.getElementById('feedback').className='info';
+  document.getElementById('feedback').textContent='Comprobando…';
+
+  // Simple local check first
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+  const correct = norm(val)===norm(movieData.title) || norm(val)===norm(movieData.title_es);
+
+  if (correct) {
+    handleResult(true, val);
+    return;
+  }
+
+  // Try Claude for fuzzy matching
+  try {
+    const prompt=`La película es "${movieData.title}" ("${movieData.title_es}", ${movieData.year}).
+El jugador escribió: "${val}".
+¿Es correcto? Acepta título en español/inglés, sin artículos, errores leves.
+Solo responde JSON: {"correct":true} o {"correct":false}`;
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:20,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await res.json();
+    const raw=data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    handleResult(JSON.parse(raw).correct, val);
+  } catch {
+    handleResult(false, val);
+  }
+}
+
+function handleResult(correct, guess) {
+  if(correct){
+    document.getElementById('feedback').className='correct';
+    document.getElementById('feedback').textContent='¡Correcto! 🎬';
+    revealResult();
+  } else {
+    attempt++;
+    renderDots();
+    updatePixelLevel();
+    if(attempt>=MAX_ATTEMPTS){
+      document.getElementById('feedback').className='wrong';
+      document.getElementById('feedback').textContent='Sin más intentos';
+      revealResult();
+    } else {
+      document.getElementById('feedback').className='wrong';
+      document.getElementById('feedback').textContent='Incorrecto — la imagen se aclara';
+      const tag=document.createElement('div');
+      tag.className='wrong-tag'; tag.textContent=guess;
+      document.getElementById('wrong-list').appendChild(tag);
+      document.getElementById('guess-input').value='';
+      setInputEnabled(true);
+      document.getElementById('guess-input').focus();
+    }
+  }
+}
+
+function revealResult(){
+  gameOver=true;
+  applyPixelation(1);
+  document.getElementById('result-title').textContent=movieData.title_es||movieData.title;
+  document.getElementById('result-year').textContent=movieData.year;
+  document.getElementById('result-overlay').classList.add('show');
+  document.getElementById('next-btn').style.display='block';
+  setInputEnabled(false);
+}
+
+function skipMovie(){ if(!gameOver){ attempt=MAX_ATTEMPTS-1; handleResult(false,'— saltado —'); } }
+function nextMovie(){ fetchMovie(); }
+function setInputEnabled(v){ document.getElementById('guess-input').disabled=!v; document.getElementById('guess-btn').disabled=!v; }
+function showLoading(v,txt){ document.getElementById('loading').classList.toggle('hidden',!v); if(txt) document.getElementById('loading-text').textContent=txt; }
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+async function startWithKey() {
+  const key = document.getElementById('tmdb-key-input').value.trim();
+  if(!key){ document.getElementById('err-msg').textContent='Introduce una API key.'; return; }
+  document.getElementById('start-btn').disabled=true;
+  document.getElementById('err-msg').textContent='Verificando…';
+  try {
+    const res = await fetch(`https://api.themoviedb.org/3/configuration?api_key=${key}`);
+    if(!res.ok) throw new Error();
+    TMDB_KEY=key;
+    localStorage.setItem('cinepixel_tmdb',key);
+    document.getElementById('setup-screen').style.display='none';
+    document.getElementById('game-screen').style.display='flex';
+    fetchMovie();
+  } catch {
+    document.getElementById('err-msg').textContent='Key inválida. Compruébala en themoviedb.org';
+    document.getElementById('start-btn').disabled=false;
+  }
+}
+
+document.getElementById('guess-btn').addEventListener('click',submitGuess);
+document.getElementById('guess-input').addEventListener('keydown',e=>{ if(e.key==='Enter') submitGuess(); });
+try{ const s=localStorage.getItem('cinepixel_tmdb'); if(s) document.getElementById('tmdb-key-input').value=s; }catch{}
+resizeCanvas();
+window.addEventListener('resize',()=>{ resizeCanvas(); if(!gameOver&&posterReady) updatePixelLevel(); });
+</script>
+</body>
+</html>
